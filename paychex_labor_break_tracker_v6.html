@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Paychex Labor & Break Tracker v6</title>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --card: #ffffff;
+      --text: #17202a;
+      --muted: #64748b;
+      --border: #d9e2ec;
+      --primary: #1f4e79;
+      --primary-dark: #173b5c;
+      --danger: #b42318;
+      --warning: #b54708;
+      --success: #027a48;
+      --soft-danger: #fdecec;
+      --soft-warning: #fff4e5;
+      --soft-blue: #eaf3fb;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    header {
+      background: var(--primary);
+      color: white;
+      padding: 22px 16px;
+      text-align: center;
+    }
+
+    header h1 { margin: 0; font-size: 24px; }
+    header p { margin: 8px 0 0; font-size: 14px; opacity: .9; }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .metric {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      background: #fbfdff;
+    }
+
+    .metric .label {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    .metric .value {
+      font-size: 26px;
+      font-weight: 700;
+    }
+
+    .metric.danger { background: var(--soft-danger); }
+    .metric.warning { background: var(--soft-warning); }
+
+    input[type="file"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      background: #fbfdff;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    button {
+      border: none;
+      background: var(--primary);
+      color: white;
+      padding: 11px 14px;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      min-height: 42px;
+    }
+
+    button:hover { background: var(--primary-dark); }
+    button.secondary { background: #475569; }
+    button.danger { background: var(--danger); }
+    button.success { background: var(--success); }
+
+    .status {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 10px;
+      background: var(--soft-blue);
+      color: #173b5c;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+
+    .error { background: var(--soft-danger); color: var(--danger); }
+    .successBox { background: #ecfdf3; color: var(--success); }
+
+    h2 { margin: 0 0 12px; font-size: 20px; }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      min-width: 720px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+      vertical-align: top;
+    }
+
+    th { background: #eef4f9; color: #102a43; }
+    tr:last-child td { border-bottom: none; }
+
+    .tag {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .tag.noBreak { background: var(--soft-danger); color: var(--danger); }
+    .tag.shortBreak { background: var(--soft-warning); color: var(--warning); }
+    .tag.over8 { background: #e8f1ff; color: #1d4ed8; }
+    .tag.under7 { background: #fff4e5; color: #b54708; }
+
+    tr.hours-yellow td { background: #fff8cc; }
+    tr.hours-orange-light td { background: #ffe7c2; }
+    tr.hours-orange td { background: #ffc078; }
+    tr.hours-red td { background: #ff8a8a; }
+    tr.hours-red-strong td { background: #b42318; color: white; }
+    tr.hours-red-strong .tag { background: white; color: #b42318; }
+
+    textarea {
+      width: 100%;
+      min-height: 260px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 12px;
+      resize: vertical;
+      white-space: pre;
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 700;
+      color: var(--primary);
+      margin-top: 10px;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    @media (max-width: 800px) {
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      header h1 { font-size: 21px; }
+      main { padding: 12px; }
+      button { width: 100%; }
+    }
+
+    @media (max-width: 480px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>Paychex Labor & Break Tracker v6</h1>
+    <p>Daily labor totals, break exceptions, and paid-hours exceptions from Paychex Labor Distribution PDF.</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Upload Paychex PDF</h2>
+      <p class="small">
+        Short Break rule: Unpaid Hours greater than 0.00 and less than 0.45. No Break rule: Unpaid Hours equal to 0.00.
+      </p>
+
+      <input id="pdfInput" type="file" accept="application/pdf" />
+
+      <div class="controls">
+        <button onclick="processPdf()">Process PDF</button>
+        <button class="secondary" onclick="processManualText()">Process Text Below</button>
+        <button class="success" onclick="exportExcel()">Export Excel</button>
+        <button class="danger" onclick="clearAll()">Clear</button>
+      </div>
+
+      <div id="status" class="status">Ready. Upload a Paychex Labor Distribution PDF.</div>
+
+      <details>
+        <summary>Extracted Text / Troubleshooting</summary>
+        <textarea id="rawText" placeholder="Extracted PDF text will show here."></textarea>
+      </details>
+    </section>
+
+    <section class="grid">
+      <div class="metric">
+        <div class="label">Total Paid Hours</div>
+        <div class="value" id="paidMetric">0.00</div>
+      </div>
+      <div class="metric">
+        <div class="label">Total OT Hours</div>
+        <div class="value" id="otMetric">0.00</div>
+      </div>
+      <div class="metric warning">
+        <div class="label">Short Breaks &lt; 0.45</div>
+        <div class="value" id="shortMetric">0</div>
+      </div>
+      <div class="metric danger">
+        <div class="label">No Break Taken</div>
+        <div class="value" id="noBreakMetric">0</div>
+      </div>
+      <div class="metric warning">
+        <div class="label">Paid Hours &lt; 7</div>
+        <div class="value" id="under7Metric">0</div>
+      </div>
+      <div class="metric">
+        <div class="label">Paid Hours &gt; 8</div>
+        <div class="value" id="over8Metric">0</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Labor Totals by Position</h2>
+      <div class="table-wrap">
+        <table id="totalsTable">
+          <thead>
+            <tr>
+              <th>Position Code</th>
+              <th>Position</th>
+              <th>Work</th>
+              <th>Meal</th>
+              <th>Regular</th>
+              <th>OT1</th>
+              <th>Paid</th>
+              <th>Unpaid</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Break Exceptions</h2>
+      <div class="table-wrap">
+        <table id="exceptionsTable">
+          <thead>
+            <tr>
+              <th>Employee ID</th>
+              <th>Employee Name</th>
+              <th>Position</th>
+              <th>Paid Hours</th>
+              <th>Unpaid Hours</th>
+              <th>Issue</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Paid Hours Exceptions</h2>
+      <p class="small">
+        Shows employees with more than 8.00 paid hours or less than 7.00 paid hours.
+        Turndown Attendant is excluded from the less-than-7-hours rule.
+      </p>
+      <div class="table-wrap">
+        <table id="paidHoursExceptionsTable">
+          <thead>
+            <tr>
+              <th>Employee ID</th>
+              <th>Employee Name</th>
+              <th>Position</th>
+              <th>Paid Hours</th>
+              <th>Issue</th>
+              <th>Color Level</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+<script>
+let totalsData = [];
+let exceptionsData = [];
+let paidHoursExceptionsData = [];
+let employeeData = [];
+
+const SHORT_BREAK_LIMIT = 0.45;
+
+const POSITION_MAP = {
+  "2550": "Housekeeping Supervisor",
+  "2560": "Room Attendant",
+  "2565": "House Attendant",
+  "2575": "Public Area Attendant",
+  "2580": "Turndown Attendant",
+  "2655": "Laundry Attendant"
+};
+
+function setStatus(message, type = "") {
+  const box = document.getElementById("status");
+  box.className = "status" + (type ? " " + type : "");
+  box.textContent = message;
+}
+
+function toNumber(value) {
+  const n = parseFloat(String(value || "").replace(/,/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function cleanLine(s) {
+  return String(s || "").replace(/\s+/g, " ").trim();
+}
+
+function money(n) {
+  return Number.isFinite(n) ? n.toFixed(2) : "0.00";
+}
+
+async function processPdf() {
+  try {
+    const input = document.getElementById("pdfInput");
+    if (!input.files || !input.files[0]) {
+      setStatus("Please upload a PDF first.", "error");
+      return;
+    }
+
+    if (!window.pdfjsLib) {
+      setStatus("PDF.js did not load. Open this app from GitHub Pages with internet access.", "error");
+      return;
+    }
+
+    setStatus("Reading PDF...");
+
+    const arrayBuffer = await input.files[0].arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let allText = "";
+
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      const linesMap = new Map();
+
+      textContent.items.forEach(item => {
+        const str = cleanLine(item.str);
+        if (!str) return;
+
+        const x = item.transform[4];
+        const y = item.transform[5];
+        const yKey = Math.round(y / 3) * 3;
+
+        if (!linesMap.has(yKey)) linesMap.set(yKey, []);
+        linesMap.get(yKey).push({ x, str });
+      });
+
+      const pageLines = Array.from(linesMap.entries())
+        .sort((a, b) => b[0] - a[0])
+        .map(([y, items]) => items.sort((a, b) => a.x - b.x).map(i => i.str).join(" "))
+        .map(cleanLine)
+        .filter(Boolean);
+
+      allText += "\n--- PAGE " + pageNum + " ---\n" + pageLines.join("\n");
+    }
+
+    document.getElementById("rawText").value = allText;
+
+    if (allText.trim().length < 50) {
+      setStatus("PDF text could not be extracted.", "error");
+      return;
+    }
+
+    analyzeText(allText);
+
+  } catch (err) {
+    setStatus("PDF processing failed: " + err.message, "error");
+  }
+}
+
+function processManualText() {
+  const text = document.getElementById("rawText").value;
+  if (!text.trim()) {
+    setStatus("Paste or extract text first.", "error");
+    return;
+  }
+  analyzeText(text);
+}
+
+function analyzeText(text) {
+  totalsData = [];
+  exceptionsData = [];
+  paidHoursExceptionsData = [];
+  employeeData = [];
+
+  const lines = text.split(/\n/).map(cleanLine).filter(Boolean);
+
+  parseTotals(lines);
+  parseEmployeesSmart(lines);
+  analyzePaidHoursExceptions();
+  renderAll();
+
+  setStatus(
+    "Processed.\n" +
+    "Position totals found: " + totalsData.length + "\n" +
+    "Employees found: " + employeeData.length + "\n" +
+    "Break exceptions found: " + exceptionsData.length + "\n" +
+    "Paid hours exceptions found: " + paidHoursExceptionsData.length,
+    totalsData.length || employeeData.length ? "successBox" : "error"
+  );
+}
+
+function isPositionHeader(line) {
+  return /\b(2550|2560|2565|2575|2580|2655)\s*-\s*/.test(line) && !/^Totals:/i.test(line);
+}
+
+function parseTotals(lines) {
+  const found = new Set();
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (!/^Totals:/i.test(line)) continue;
+    const codeMatch = line.match(/^Totals:\s*(2550|2560|2565|2575|2580|2655)\b/i);
+    if (!codeMatch) continue;
+
+    const code = codeMatch[1];
+    if (found.has(code)) continue;
+
+    let block = line;
+
+    for (let j = i + 1; j < lines.length; j++) {
+      const next = lines[j];
+
+      if (/^Grand Totals:/i.test(next)) break;
+      if (/^--- PAGE/i.test(next)) break;
+      if (/^Work Labor Distribution/i.test(next)) break;
+      if (/^Filter -/i.test(next)) break;
+      if (/^Page \d+/i.test(next)) break;
+      if (isPositionHeader(next)) break;
+      if (/^Totals:/i.test(next) && j !== i) break;
+
+      block += " " + next;
+
+      const numsSoFar = block.match(/\d+\.\d{1,2}/g) || [];
+      if (numsSoFar.length >= 6) break;
+    }
+
+    const nums = block.match(/\d+\.\d{1,2}/g) || [];
+
+    if (nums.length >= 6) {
+      const lastSix = nums.slice(-6).map(toNumber);
+      const paid = lastSix[4];
+      const unpaid = lastSix[5];
+
+      if (!(code === "2655" && paid > 250 && unpaid > 10)) {
+        totalsData.push({
+          code,
+          position: POSITION_MAP[code],
+          work: lastSix[0],
+          meal: lastSix[1],
+          regular: lastSix[2],
+          ot1: lastSix[3],
+          paid,
+          unpaid
+        });
+        found.add(code);
+      }
+    }
+  }
+
+  totalsData.sort((a,b) => Number(a.code) - Number(b.code));
+}
+
+// More robust employee parser:
+// It builds complete employee records from ID to next ID/Totals/header.
+// This fixes wrapped names like "Garcia Martinez," then "Fabiola".
+function parseEmployeesSmart(lines) {
+  let currentCode = "";
+  let currentPosition = "";
+  let pendingNameParts = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    const headerMatch = line.match(/\b(2550|2560|2565|2575|2580|2655)\s*-\s*([A-Za-z ]+)/);
+    if (headerMatch && !/^Totals:/i.test(line)) {
+      currentCode = headerMatch[1];
+      currentPosition = POSITION_MAP[currentCode] || headerMatch[2].trim();
+      pendingNameParts = [];
+      continue;
+    }
+
+    if (/^Totals:/i.test(line) || /^Grand Totals:/i.test(line)) {
+      pendingNameParts = [];
+      continue;
+    }
+
+    if (/^(Work|Labor Distribution|Meal Regular|Filter -|Page \d+|--- PAGE)/i.test(line)) {
+      continue;
+    }
+
+    const empMatch = line.match(/\b(261\d{5})\b/);
+
+    if (!empMatch) {
+      const hasNumbers = /\d+\.\d{1,2}/.test(line);
+      const looksLikeName = /^[A-Za-zÁÉÍÓÚáéíóúÑñ ,.'-]+$/.test(line);
+      if (!hasNumbers && looksLikeName && !line.includes("-")) {
+        pendingNameParts.push(line);
+        if (pendingNameParts.length > 4) pendingNameParts.shift();
+      }
+      continue;
+    }
+
+    const empId = empMatch[1];
+
+    let recordLines = [line];
+
+    // Join following lines when the current employee row is wrapped.
+    // Stop when next employee, Totals, Grand Totals, or position header appears.
+    for (let j = i + 1; j < lines.length; j++) {
+      const next = lines[j];
+
+      if (/\b261\d{5}\b/.test(next)) break;
+      if (/^Totals:/i.test(next)) break;
+      if (/^Grand Totals:/i.test(next)) break;
+      if (isPositionHeader(next)) break;
+      if (/^--- PAGE/i.test(next)) break;
+      if (/^(Work Labor Distribution|Filter -|Page \d+)/i.test(next)) break;
+
+      // Add only likely name continuation or numeric continuation.
+      if (/^[A-Za-zÁÉÍÓÚáéíóúÑñ ,.'-]+$/.test(next) || /\d+\.\d{1,2}/.test(next)) {
+        recordLines.push(next);
+      }
+
+      const joinedSoFar = recordLines.join(" ");
+      const numsSoFar = joinedSoFar.match(/\d+\.\d{1,2}/g) || [];
+      if (numsSoFar.length >= 2) {
+        // If we already have the numbers, do not consume unrelated following names.
+        // Exception: if the next line is only a name continuation and current line had a comma name fragment,
+        // it was already consumed before the numbers in most Paychex formats.
+        break;
+      }
+    }
+
+    const record = cleanLine(recordLines.join(" "));
+    const before = cleanLine(record.substring(0, record.indexOf(empId)));
+    const after = cleanLine(record.substring(record.indexOf(empId) + empId.length));
+
+    let name = "";
+    let numericSource = after;
+
+    const afterNameMatch = after.match(/^([A-Za-zÁÉÍÓÚáéíóúÑñ ,.'-]+?)\s+(\d+\.\d{1,2})/);
+    if (afterNameMatch) {
+      name = cleanLine(afterNameMatch[1]);
+      numericSource = after.substring(afterNameMatch[1].length);
+    } else {
+      name = cleanLine([...pendingNameParts, before].join(" "));
+    }
+
+    name = name.replace(/^,|,$/g, "").trim() || "Name not detected";
+    pendingNameParts = [];
+
+    const nums = numericSource.match(/\d+\.\d{1,2}/g) || [];
+
+    if (nums.length >= 2) {
+      const unpaid = toNumber(nums[nums.length - 1]);
+      const paid = toNumber(nums[nums.length - 2]);
+      const ot1 = nums.length >= 3 ? toNumber(nums[nums.length - 3]) : 0;
+
+      const employee = {
+        employeeId: empId,
+        name,
+        positionCode: currentCode,
+        position: currentPosition || "Position not detected",
+        paid,
+        unpaid,
+        ot1
+      };
+
+      employeeData.push(employee);
+
+      if (unpaid === 0) {
+        exceptionsData.push({ ...employee, issue: "No Break Taken" });
+      } else if (unpaid < SHORT_BREAK_LIMIT) {
+        exceptionsData.push({ ...employee, issue: "Short Break" });
+      }
+    }
+  }
+}
+
+
+function isTurndown(position) {
+  return String(position || "").toLowerCase().includes("turndown");
+}
+
+function getPaidHoursSeverity(paid) {
+  if (paid < 3) {
+    return { className: "hours-red-strong", level: "Critical - under 3.00 hours" };
+  }
+  if (paid < 5) {
+    return { className: "hours-red", level: "High - under 5.00 hours" };
+  }
+  if (paid < 6) {
+    return { className: "hours-orange", level: "Medium - under 6.00 hours" };
+  }
+  if (paid < 6.5) {
+    return { className: "hours-orange-light", level: "Low - under 6.50 hours" };
+  }
+  if (paid < 7) {
+    return { className: "hours-yellow", level: "Watch - 6.50 to 6.99 hours" };
+  }
+  return { className: "", level: "" };
+}
+
+function analyzePaidHoursExceptions() {
+  paidHoursExceptionsData = [];
+
+  employeeData.forEach(employee => {
+    const paid = Number(employee.paid);
+
+    if (paid > 8) {
+      paidHoursExceptionsData.push({
+        ...employee,
+        issue: "Over 8 Paid Hours",
+        severityClass: "",
+        severityLevel: "Over 8.00 hours"
+      });
+    }
+
+    if (paid < 7 && !isTurndown(employee.position)) {
+      const severity = getPaidHoursSeverity(paid);
+      paidHoursExceptionsData.push({
+        ...employee,
+        issue: "Under 7 Paid Hours",
+        severityClass: severity.className,
+        severityLevel: severity.level
+      });
+    }
+  });
+}
+
+function renderAll() {
+  renderTotals();
+  renderExceptions();
+  renderPaidHoursExceptions();
+  renderMetrics();
+}
+
+function renderTotals() {
+  const tbody = document.querySelector("#totalsTable tbody");
+  tbody.innerHTML = "";
+
+  if (!totalsData.length) {
+    tbody.innerHTML = `<tr><td colspan="8">No position totals found.</td></tr>`;
+    return;
+  }
+
+  totalsData.forEach(row => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${row.code}</td>
+      <td>${row.position}</td>
+      <td>${money(row.work)}</td>
+      <td>${money(row.meal)}</td>
+      <td>${money(row.regular)}</td>
+      <td>${money(row.ot1)}</td>
+      <td><strong>${money(row.paid)}</strong></td>
+      <td>${money(row.unpaid)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderExceptions() {
+  const tbody = document.querySelector("#exceptionsTable tbody");
+  tbody.innerHTML = "";
+
+  if (!exceptionsData.length) {
+    tbody.innerHTML = `<tr><td colspan="6">No break exceptions found.</td></tr>`;
+    return;
+  }
+
+  exceptionsData
+    .sort((a,b) => a.position.localeCompare(b.position) || a.name.localeCompare(b.name))
+    .forEach(row => {
+      const tagClass = row.issue === "No Break Taken" ? "noBreak" : "shortBreak";
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${row.employeeId}</td>
+        <td>${row.name}</td>
+        <td>${row.position}</td>
+        <td>${money(row.paid)}</td>
+        <td>${money(row.unpaid)}</td>
+        <td><span class="tag ${tagClass}">${row.issue}</span></td>
+      `;
+      tbody.appendChild(tr);
+    });
+}
+
+
+function renderPaidHoursExceptions() {
+  const tbody = document.querySelector("#paidHoursExceptionsTable tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  if (!paidHoursExceptionsData.length) {
+    tbody.innerHTML = `<tr><td colspan="6">No paid hours exceptions found.</td></tr>`;
+    return;
+  }
+
+  paidHoursExceptionsData
+    .sort((a, b) => {
+      if (a.issue !== b.issue) return a.issue.localeCompare(b.issue);
+      if (a.issue === "Under 7 Paid Hours") return a.paid - b.paid;
+      return b.paid - a.paid;
+    })
+    .forEach(row => {
+      const tagClass = row.issue === "Over 8 Paid Hours" ? "over8" : "under7";
+      const tr = document.createElement("tr");
+      if (row.severityClass) tr.className = row.severityClass;
+      tr.innerHTML = `
+        <td>${row.employeeId}</td>
+        <td>${row.name}</td>
+        <td>${row.position}</td>
+        <td><strong>${money(row.paid)}</strong></td>
+        <td><span class="tag ${tagClass}">${row.issue}</span></td>
+        <td>${row.severityLevel || ""}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+}
+
+function renderMetrics() {
+  const totalPaid = totalsData.reduce((sum, r) => sum + r.paid, 0);
+  const totalOT = totalsData.reduce((sum, r) => sum + r.ot1, 0);
+  const noBreak = exceptionsData.filter(r => r.issue === "No Break Taken").length;
+  const shortBreak = exceptionsData.filter(r => r.issue === "Short Break").length;
+  const under7 = paidHoursExceptionsData.filter(r => r.issue === "Under 7 Paid Hours").length;
+  const over8 = paidHoursExceptionsData.filter(r => r.issue === "Over 8 Paid Hours").length;
+
+  document.getElementById("paidMetric").textContent = totalPaid.toFixed(2);
+  document.getElementById("otMetric").textContent = totalOT.toFixed(2);
+  document.getElementById("shortMetric").textContent = shortBreak;
+  document.getElementById("noBreakMetric").textContent = noBreak;
+  document.getElementById("under7Metric").textContent = under7;
+  document.getElementById("over8Metric").textContent = over8;
+}
+
+function exportExcel() {
+  if (!totalsData.length && !exceptionsData.length && !paidHoursExceptionsData.length && !employeeData.length) {
+    setStatus("Nothing to export. Process a report first.", "error");
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(totalsData.map(r => ({
+    "Position Code": r.code,
+    "Position": r.position,
+    "Work": r.work,
+    "Meal": r.meal,
+    "Regular": r.regular,
+    "OT1": r.ot1,
+    "Paid": r.paid,
+    "Unpaid": r.unpaid
+  }))), "Labor Totals");
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exceptionsData.map(r => ({
+    "Employee ID": r.employeeId,
+    "Employee Name": r.name,
+    "Position": r.position,
+    "Paid Hours": r.paid,
+    "Unpaid Hours": r.unpaid,
+    "Issue": r.issue
+  }))), "Break Exceptions");
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(paidHoursExceptionsData.map(r => ({
+    "Employee ID": r.employeeId,
+    "Employee Name": r.name,
+    "Position": r.position,
+    "Paid Hours": r.paid,
+    "Issue": r.issue,
+    "Color Level": r.severityLevel || ""
+  }))), "Paid Hours Exceptions");
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(employeeData.map(r => ({
+    "Employee ID": r.employeeId,
+    "Employee Name": r.name,
+    "Position Code": r.positionCode,
+    "Position": r.position,
+    "Paid Hours": r.paid,
+    "Unpaid Hours": r.unpaid,
+    "OT1": r.ot1
+  }))), "All Employees");
+
+  XLSX.writeFile(wb, "Paychex_Labor_Break_Tracker.xlsx");
+}
+
+function clearAll() {
+  totalsData = [];
+  exceptionsData = [];
+  paidHoursExceptionsData = [];
+  employeeData = [];
+  document.getElementById("pdfInput").value = "";
+  document.getElementById("rawText").value = "";
+  renderAll();
+  setStatus("Cleared. Upload a new Paychex PDF.");
+}
+
+renderAll();
+</script>
+</body>
+</html>
